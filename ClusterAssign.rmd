@@ -1,0 +1,109 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+# BAN 502 - Clustering Assignment
+
+## Khayrayyah Haamid-Day
+
+```{r include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(cluster) #algorithms for clustering
+library(factoextra)
+trucks <- read_csv("trucks.csv")
+#summary(trucks)
+```
+
+```{r}
+ggplot(trucks, aes(Distance, Speeding)) +
+  geom_point(alpha = 0.4) + theme_bw()
+```
+*Task 1*
+
+It does appear that there is natural clustering  happening. The first cluster has a stronger concentration of data around speeding of 12. The second cluster is more spread apart with data points extending from 0 to 100 speeding, though there is a strong concentration  below 25. Distance for cluster 1 is within a range of more than 0 and less than 75. While the distance for cluster 2 is mainly focused around 150 to 225.
+
+```{r}
+#Task 2
+
+trucks_cleaned = recipe(~ Distance + Speeding, trucks)
+
+trucks_dummy = trucks_cleaned %>% 
+  step_scale(all_numeric()) %>%
+  step_center(all_numeric())
+
+trucks_dummy = prep(trucks_dummy, trucks)
+trucks_cleaned = bake(trucks_dummy, trucks)
+
+#summary(trucks_dummy)
+```
+
+```{r}
+#Task 3
+set.seed(64)
+kclust = kmeans(trucks_cleaned, centers = 2)
+#kclust
+trucks_cleaned = augment(kclust, trucks_cleaned)
+#trucks_cleaned
+
+ggplot(trucks_cleaned, aes(Distance, Speeding, color = .cluster)) +
+  geom_point(alpha = 0.4) + theme_bw()
+```
+
+The clusters look the same as the graph done before. 
+
+```{r}
+#Task 4
+set.seed(412)
+clusts = 
+  tibble(k = 1:8) %>% 
+  mutate(
+    kclust = map(k, ~kmeans(trucks_cleaned, .x)),
+    tidied = map(kclust, tidy),
+    glanced = map(kclust, glance),
+    augmented = map(kclust, augment, trucks_cleaned)
+  )
+
+clusts
+
+clusters =
+  clusts %>%
+  unnest(cols = c(tidied))
+
+assignments = 
+  clusts %>% 
+  unnest(cols = c(augmented))
+
+clusterings = 
+  clusts %>%
+  unnest(cols = c(glanced))
+
+p1 = 
+  ggplot(assignments, aes(x = Distance, y = Speeding)) +
+  geom_point(aes(color = .cluster), alpha = 0.8) + 
+  facet_wrap(~ k)
+p1
+```
+
+A value of 4 looks to be the most appropriate for this data.
+
+```{r}
+#Task 5 
+ggplot(clusterings, aes(k, tot.withinss)) +
+  geom_line() +
+  geom_point() + theme_bw()
+```
+
+It appears 4 is the best.
+
+```{r}
+#Task 6
+set.seed(64)
+clusters = kmeans(trucks_cleaned, centers = 4)
+#clusters
+trucks = augment(clusters, trucks)
+
+ggplot(trucks, aes(x=Distance,y=Speeding,color=factor(.cluster))) + geom_point() 
+```
+Using 4 clusters looks visually good and separated in a way that makes sense. 1 and 4 are clustered for lower speed while 2 and 3 are clustered with higher speeds. 2 and 4 are separated from 1 and 3 to account for larger distance differences. 
